@@ -19,9 +19,10 @@ import (
 const ContainerRuntimeEndpoint = "unix:///run/containerd/containerd.sock"
 
 const (
-	containerdConfigFile      = "/etc/containerd/config.toml"
-	sociSnapshotterConfigFile = "/etc/soci-snapshotter-grpc/config.toml"
-	configPerm                = 0644
+	containerdConfigFile         = "/etc/containerd/config.toml"
+	sociSnapshotterConfigFile    = "/etc/soci-snapshotter-grpc/config.toml"
+	containerdSnapshotterEnvFile = "/etc/eks/containerd_snapshotter"
+	configPerm                   = 0644
 )
 
 var (
@@ -162,6 +163,16 @@ func writeSnapshotterConfig(cfg *api.NodeConfig, resources system.Resources) err
 	}
 
 	return nil
+}
+
+func writeContainerdSnapshotterEnv(cfg *api.NodeConfig, resources system.Resources) error {
+	snapshotter := "overlayfs"
+	if UseSOCISnapshotter(cfg, resources) {
+		snapshotter = "soci"
+	}
+	content := []byte(fmt.Sprintf("CONTAINERD_SNAPSHOTTER=%s\n", snapshotter))
+	zap.L().Info("Writing containerd snapshotter env file..", zap.String("path", containerdSnapshotterEnvFile), zap.String("snapshotter", snapshotter))
+	return util.WriteFileWithDir(containerdSnapshotterEnvFile, content, configPerm)
 }
 
 func UseSOCISnapshotter(cfg *api.NodeConfig, resources system.Resources) bool {
