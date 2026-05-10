@@ -61,3 +61,5 @@ sudo systemctl enable \
 
 # create the drop-in config directory
 sudo mkdir -p /etc/eks/nodeadm.d/
+
+sudo systemctl stop containerd
