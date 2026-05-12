@@ -32,6 +32,9 @@ func (cd *containerd) Configure(c *api.NodeConfig) error {
 	if err := writeContainerdSnapshotterEnv(c, cd.resources); err != nil {
 		return err
 	}
+	if err := writeSOCIServiceDependency(c, cd.resources); err != nil {
+		return err
+	}
 	return writeContainerdConfig(c, cd.resources)
 }
 

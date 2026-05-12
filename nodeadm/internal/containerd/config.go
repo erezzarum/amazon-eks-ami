@@ -197,3 +197,33 @@ func UseSOCISnapshotter(cfg *api.NodeConfig, resources system.Resources) bool {
 	// e.g. in my test a c6a.2xlarge with 16GiB of memory showed 15.75GiB available.
 	return totalMemory >= 7*gibibyte && totalCPUMillicores >= 4000
 }
+
+const (
+	// sociDependencyDropInPath is the systemd drop-in that makes containerd.service
+	// depend on soci-snapshotter.service. This ensures the SOCI gRPC server is
+	// fully ready (Type=notify) before containerd is considered active.
+	sociDependencyDropInPath = "/etc/systemd/system/containerd.service.d/10-soci-snapshotter.conf"
+	sociDependencyDropIn     = `[Unit]
+Requires=soci-snapshotter.service
+After=soci-snapshotter.service
+`
+)
+
+// writeSOCIServiceDependency writes a systemd drop-in for containerd.service that
+// adds a hard dependency on soci-snapshotter.service. Because soci-snapshotter is
+// Type=notify, systemd will not consider it active until its gRPC server sends
+// READY=1. This guarantees that when EnsureRunning() returns after starting
+// containerd, the SOCI snapshotter is fully initialized and ready to serve requests.
+func writeSOCIServiceDependency(cfg *api.NodeConfig, resources system.Resources) error {
+	if !UseSOCISnapshotter(cfg, resources) {
+		return nil
+	}
+	zap.L().Info("Writing SOCI dependency drop-in for containerd.service")
+	if err := util.WriteFileWithDir(sociDependencyDropInPath, []byte(sociDependencyDropIn), configPerm); err != nil {
+		return fmt.Errorf("writing SOCI dependency drop-in: %w", err)
+	}
+	if output, err := exec.Command("systemctl", "daemon-reload").CombinedOutput(); err != nil {
+		return fmt.Errorf("reloading systemd after writing drop-in: %w, output: %s", err, string(output))
+	}
+	return nil
+}
